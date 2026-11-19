@@ -1,4 +1,4 @@
-# Card compatta "Posta" per la vista Colpo d'occhio
+# Card compatta (stile vetro come le altre card della dashboard) "Posta" per la vista Colpo d'occhio
 # Richiede: custom:button-card (già installata)
 # Tocco  = posta ritirata (azzera, con conferma)
 # Tieni premuto = dettagli contatore
@@ -37,8 +37,8 @@ custom_fields:
       const b = states['sensor.cassetta_postale_battery']?.state;
       const low = states['binary_sensor.cassetta_postale_battery_low']?.state === 'on';
       if (b === undefined || b === 'unavailable' || b === 'unknown')
-        return `<ha-icon icon="mdi:battery-unknown" style="width:16px;color:var(--disabled-text-color)"></ha-icon>`;
-      const col = low ? 'var(--error-color)' : 'var(--secondary-text-color)';
+        return `<ha-icon icon="mdi:battery-unknown" style="width:16px;color:rgba(255,255,255,.4)"></ha-icon>`;
+      const col = low ? 'var(--error-color)' : 'rgba(255,255,255,.72)';
       return `<ha-icon icon="mdi:battery${low ? '-alert-variant-outline' : '-outline'}" style="width:16px;color:${col}"></ha-icon><span style="color:${col}">${b}%</span>`;
     ]]]
 tap_action:
@@ -48,6 +48,8 @@ tap_action:
     text: Hai ritirato la posta? Il contatore verrà azzerato.
 hold_action:
   action: more-info
+grid_options:
+  columns: 12
 state:
   - operator: template
     value: "[[[ return states['binary_sensor.cassetta_postale_contact']?.state === 'on' ]]]"
@@ -65,7 +67,7 @@ state:
         - color: "#FFA500"
         - animation: posta-pulse 2s ease-in-out infinite
       label:
-        - color: var(--primary-text-color)
+        - color: "#ffffff"
 extra_styles: |
   @keyframes posta-pulse {
     0%, 100% { opacity: 1; }
@@ -73,29 +75,35 @@ extra_styles: |
   }
 styles:
   card:
-    - padding: 10px 12px
-    - height: 64px
+    - background: rgba(255,255,255,.09)
+    - backdrop-filter: blur(20px)
+    - "-webkit-backdrop-filter": blur(20px)
+    - border: 1px solid rgba(255,255,255,.16)
+    - border-radius: 22px
+    - box-shadow: 0 8px 32px rgba(0,0,0,.35)
+    - padding: 12px 14px
   grid:
     - grid-template-areas: '"i n batt" "i l batt"'
-    - grid-template-columns: 44px 1fr min-content
+    - grid-template-columns: 40px 1fr min-content
     - grid-template-rows: 1fr 1fr
     - column-gap: 10px
   img_cell:
     - position: relative
     - overflow: visible
   icon:
-    - width: 30px
-    - color: var(--secondary-text-color)
+    - width: 28px
+    - color: "#ffffff"
   name:
     - justify-self: start
     - align-self: end
-    - font-weight: 600
+    - color: "#ffffff"
     - font-size: 14px
+    - font-weight: 600
   label:
     - justify-self: start
     - align-self: start
     - font-size: 12px
-    - color: var(--secondary-text-color)
+    - color: rgba(255,255,255,.72)
   custom_fields:
     batt:
       - align-self: center
@@ -106,8 +114,8 @@ styles:
     badge:
       - display: "[[[ return (parseInt(entity.state) || 0) > 0 ? 'block' : 'none' ]]]"
       - position: absolute
-      - left: 34px
-      - top: 6px
+      - left: 36px
+      - top: 8px
       - min-width: 18px
       - height: 18px
       - padding: 0 4px
