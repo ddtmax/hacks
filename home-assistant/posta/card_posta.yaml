@@ -1,0 +1,121 @@
+# Card compatta "Posta" per la vista Colpo d'occhio
+# Richiede: custom:button-card (già installata)
+# Tocco  = posta ritirata (azzera, con conferma)
+# Tieni premuto = dettagli contatore
+type: custom:button-card
+entity: counter.contatore_lettere
+name: Posta
+icon: mdi:mailbox-outline
+show_state: false
+show_label: true
+triggers_update:
+  - binary_sensor.cassetta_postale_contact
+  - binary_sensor.cassetta_postale_battery_low
+  - sensor.cassetta_postale_battery
+  - input_datetime.posta_ultimo_arrivo
+label: |
+  [[[
+    if (states['binary_sensor.cassetta_postale_contact']?.state === 'on')
+      return 'Sportello aperto';
+    const n = parseInt(entity.state) || 0;
+    if (n === 0) return 'Nessuna posta';
+    const t = states['input_datetime.posta_ultimo_arrivo']?.attributes?.timestamp;
+    const ora = t
+      ? new Date(t * 1000).toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'})
+      : '';
+    const txt = n === 1 ? '1 consegna' : `${n} consegne`;
+    return ora ? `${txt} · ultima alle ${ora}` : txt;
+  ]]]
+custom_fields:
+  badge: |
+    [[[
+      const n = parseInt(entity.state) || 0;
+      return n > 0 ? `<span>${n}</span>` : '';
+    ]]]
+  batt: |
+    [[[
+      const b = states['sensor.cassetta_postale_battery']?.state;
+      const low = states['binary_sensor.cassetta_postale_battery_low']?.state === 'on';
+      if (b === undefined || b === 'unavailable' || b === 'unknown')
+        return `<ha-icon icon="mdi:battery-unknown" style="width:16px;color:var(--disabled-text-color)"></ha-icon>`;
+      const col = low ? 'var(--error-color)' : 'var(--secondary-text-color)';
+      return `<ha-icon icon="mdi:battery${low ? '-alert-variant-outline' : '-outline'}" style="width:16px;color:${col}"></ha-icon><span style="color:${col}">${b}%</span>`;
+    ]]]
+tap_action:
+  action: perform-action
+  perform_action: script.posta_ritirata
+  confirmation:
+    text: Hai ritirato la posta? Il contatore verrà azzerato.
+hold_action:
+  action: more-info
+state:
+  - operator: template
+    value: "[[[ return states['binary_sensor.cassetta_postale_contact']?.state === 'on' ]]]"
+    icon: mdi:mailbox-open-up-outline
+    styles:
+      icon:
+        - color: var(--error-color)
+      label:
+        - color: var(--error-color)
+  - operator: ">"
+    value: 0
+    icon: mdi:mailbox-up
+    styles:
+      icon:
+        - color: "#FFA500"
+        - animation: posta-pulse 2s ease-in-out infinite
+      label:
+        - color: var(--primary-text-color)
+extra_styles: |
+  @keyframes posta-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .35; }
+  }
+styles:
+  card:
+    - padding: 10px 12px
+    - height: 64px
+  grid:
+    - grid-template-areas: '"i n batt" "i l batt"'
+    - grid-template-columns: 44px 1fr min-content
+    - grid-template-rows: 1fr 1fr
+    - column-gap: 10px
+  img_cell:
+    - position: relative
+    - overflow: visible
+  icon:
+    - width: 30px
+    - color: var(--secondary-text-color)
+  name:
+    - justify-self: start
+    - align-self: end
+    - font-weight: 600
+    - font-size: 14px
+  label:
+    - justify-self: start
+    - align-self: start
+    - font-size: 12px
+    - color: var(--secondary-text-color)
+  custom_fields:
+    batt:
+      - align-self: center
+      - display: flex
+      - align-items: center
+      - gap: 2px
+      - font-size: 11px
+    badge:
+      - display: "[[[ return (parseInt(entity.state) || 0) > 0 ? 'block' : 'none' ]]]"
+      - position: absolute
+      - left: 34px
+      - top: 6px
+      - min-width: 18px
+      - height: 18px
+      - padding: 0 4px
+      - box-sizing: border-box
+      - border-radius: 9px
+      - background: "#FFA500"
+      - color: white
+      - font-size: 11px
+      - font-weight: 700
+      - line-height: 18px
+      - text-align: center

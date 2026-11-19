@@ -1,0 +1,185 @@
+# =====================================================================
+# Package: Cassetta della posta
+# Sensore: binary_sensor.cassetta_postale_contact (Zigbee2MQTT, porta)
+#   on  = sportello aperto  -> arrivata posta
+#   off = sportello chiuso
+# File da copiare in: /config/packages/posta.yaml
+# =====================================================================
+
+# Contatore delle consegne di oggi
+counter:
+  contatore_lettere:
+    name: "Posta Oggi"
+    icon: mdi:mailbox
+    initial: 0
+    step: 1
+    restore: true
+
+# Ora dell'ultima consegna (mostrata nella card)
+input_datetime:
+  posta_ultimo_arrivo:
+    name: "Posta - Ultimo arrivo"
+    icon: mdi:clock-outline
+    has_date: true
+    has_time: true
+
+# Script "posta ritirata": azzera il contatore e rimuove le notifiche
+script:
+  posta_ritirata:
+    alias: "Posta - Ritirata"
+    description: "Azzera il contatore e cancella le notifiche della posta dai telefoni"
+    icon: mdi:mailbox-open-outline
+    mode: single
+    sequence:
+      - action: counter.reset
+        target:
+          entity_id: counter.contatore_lettere
+      - parallel:
+          - action: notify.mobile_app_pixel_10_pro
+            continue_on_error: true
+            data:
+              message: clear_notification
+              data:
+                tag: posta_arrivo
+          - action: notify.mobile_app_pixel_7
+            continue_on_error: true
+            data:
+              message: clear_notification
+              data:
+                tag: posta_arrivo
+      - action: logbook.log
+        data:
+          name: "Posta"
+          message: "Posta ritirata, contatore azzerato"
+          entity_id: counter.contatore_lettere
+
+automation:
+  # ---------------------------------------------------------------
+  # Arrivo posta: conta, salva l'ora, notifica e annuncia.
+  # Il delay finale + mode single fanno da anti-rimbalzo: le aperture
+  # ripetute entro 1 minuto (sportello che sbatte) contano come una.
+  # ---------------------------------------------------------------
+  - id: posta_arrivo
+    alias: "Posta - Arrivo"
+    description: "Conta la posta, invia notifiche push e annuncio vocale"
+    mode: single
+    max_exceeded: silent
+    triggers:
+      - trigger: door.opened
+        target:
+          entity_id: binary_sensor.cassetta_postale_contact
+    actions:
+      - action: counter.increment
+        target:
+          entity_id: counter.contatore_lettere
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.posta_ultimo_arrivo
+        data:
+          timestamp: "{{ now().timestamp() }}"
+      - variables:
+          conteggio: "{{ states('counter.contatore_lettere') | int(0) }}"
+          testo: >-
+            {% if conteggio == 1 %}C'è posta nella cassetta!
+            {% else %}C'è posta nella cassetta! {{ conteggio }} consegne oggi.{% endif %}
+      - parallel:
+          - action: notify.mobile_app_pixel_10_pro
+            continue_on_error: true
+            data:
+              title: "📬 Posta arrivata"
+              message: "{{ testo }}"
+              data: &notifica_posta
+                tag: posta_arrivo
+                notification_icon: mdi:mailbox-up
+                color: "#FFA500"
+                channel: Posta
+                importance: high
+                priority: high
+                ttl: 0
+          - action: notify.mobile_app_pixel_7
+            continue_on_error: true
+            data:
+              title: "📬 Posta arrivata"
+              message: "{{ testo }}"
+              data: *notifica_posta
+          - if:
+              - condition: time
+                after: "08:00:00"
+                before: "21:30:00"
+            then:
+              - action: tts.speak
+                continue_on_error: true
+                target:
+                  entity_id: tts.home_assistant_cloud
+                data:
+                  cache: false
+                  media_player_entity_id: media_player.casa
+                  message: >-
+                    Attenzione! È arrivata la posta.
+                    {% if conteggio > 1 %}È la consegna numero {{ conteggio }} di oggi.{% endif %}
+      - action: logbook.log
+        data:
+          name: "Posta"
+          message: "Posta ricevuta ({{ conteggio }} oggi)"
+          entity_id: counter.contatore_lettere
+      # anti-rimbalzo
+      - delay: "00:01:00"
+
+  # ---------------------------------------------------------------
+  # Sportello rimasto aperto (pioggia, posta incastrata...)
+  # ---------------------------------------------------------------
+  - id: posta_sportello_aperto
+    alias: "Posta - Sportello rimasto aperto"
+    description: "Avvisa se lo sportello della cassetta resta aperto per 10 minuti"
+    mode: single
+    triggers:
+      - trigger: door.opened
+        target:
+          entity_id: binary_sensor.cassetta_postale_contact
+        options:
+          for: "00:10:00"
+    actions:
+      - action: notify.mobile_app_pixel_10_pro
+        data:
+          title: "📭 Cassetta della posta"
+          message: "Lo sportello della cassetta è aperto da 10 minuti."
+          data:
+            tag: posta_sportello
+            notification_icon: mdi:mailbox-open-up-outline
+
+  # ---------------------------------------------------------------
+  # Batteria del sensore scarica
+  # ---------------------------------------------------------------
+  - id: posta_batteria_scarica
+    alias: "Posta - Batteria sensore scarica"
+    description: "Avvisa quando la batteria del sensore della cassetta è scarica"
+    mode: single
+    triggers:
+      - trigger: battery.became_low
+        target:
+          entity_id: binary_sensor.cassetta_postale_battery_low
+    actions:
+      - action: notify.mobile_app_pixel_10_pro
+        data:
+          title: "🔋 Cassetta della posta"
+          message: >-
+            Batteria del sensore scarica
+            ({{ states('sensor.cassetta_postale_battery') }}%): sostituiscila.
+          data:
+            tag: posta_batteria
+            notification_icon: mdi:battery-alert-variant-outline
+
+  # ---------------------------------------------------------------
+  # Azzeramento automatico a mezzanotte
+  # ---------------------------------------------------------------
+  - id: posta_reset_mezzanotte
+    alias: "Posta - Reset mezzanotte"
+    description: "Azzera il contatore della posta ogni giorno a mezzanotte"
+    mode: single
+    triggers:
+      - trigger: time
+        at: "00:00:00"
+    actions:
+      - action: counter.reset
+        target:
+          entity_id: counter.contatore_lettere
